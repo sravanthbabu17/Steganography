@@ -3,7 +3,7 @@
 A web application that hides encrypted text inside an image using AES-256 encryption and simple steganography techniques (pixel-level data embedding).
 Built with HTML5, Canvas API, CryptoJS, and pure JavaScript.
 
-Live Demo ✨: (You can mention the live link if you deploy it later, like GitHub Pages)
+Live Demo ✨: (https://sravanthbabu17.github.io/Steganography/)
 
 🔥 Features
 Encrypt any text with a user-defined key (AES encryption).
