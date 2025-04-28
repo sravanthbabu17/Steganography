@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-Image Steganography with AES</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body { 
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+            overflow-y: auto; /* Allow vertical scrolling */
+            font-family: 'Courier New', monospace;
+            color: #00CED1; /* Aqua text */
+            /* Hide scrollbar for Firefox */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* Internet Explorer and Edge (legacy) */
+        }
+        /* Hide scrollbar for Webkit browsers (Chrome, Edge, Safari) */
+        body::-webkit-scrollbar {
+            display: none; /* Hide the scrollbar */
+        }
+        html {
+    scrollbar-width: thin;
+    scrollbar-color: #00CED1 #222; /* Aqua thumb, dark gray track */
+}
+
+/* Webkit browsers (Chrome, Edge, Safari) */
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+    width: 8px;
+}
+
+html::-webkit-scrollbar-track, body::-webkit-scrollbar-track {
+    background: #222; /* Dark gray track */
+}
+
+html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
+    background: #00CED1; /* Aqua thumb */
+    border-radius: 4px;
+}
+
+html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover {
+    background: #40E0D0; /* Lighter aqua on hover */
+}
+        #matrixCanvas { 
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1; /* Behind everything */
+        }
+        .container { 
+            position: relative;
+            max-width: 600px;
+            margin: 50px auto;
+            background: rgba(10, 10, 10, 0.9);
+            padding: 25px;
+            border: 2px solid #00CED1; /* Aqua */
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 206, 209, 0.3);
+            z-index: 1;
+            min-height: calc(100vh - 100px); /* Ensure container takes at least full viewport height minus margins */
+            box-sizing: border-box;
+        }
+        h1 { 
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        h3 { 
+            font-size: 18px;
+            margin: 20px 0 10px;
+            text-align: center;
+        }
+        p { 
+            font-size: 14px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        button { 
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #00CED1; /* Aqua */
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            transition: background-color 0.2s;
+        }
+        button:hover { 
+            background-color: #40E0D0; /* Lighter aqua */
+        }
+        button:disabled { 
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        textarea { 
+            width: 100%;
+            max-width: 400px;
+            height: 60px;
+            margin: 8px auto;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #00CED1; /* Aqua */
+            background-color: #222;
+            color: #00CED1; /* Aqua */
+            box-sizing: border-box;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            display: block;
+        }
+        #canvas { 
+            border: 2px solid #00CED1; /* Aqua */
+            margin: 20px auto;
+            display: none;
+            max-width: 100%;
+        }
+        #canvas.visible { 
+            display: block;
+        }
+        #output { 
+            margin-top: 15px;
+            font-size: 14px;
+            background: #111;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        input[type="file"] { 
+            margin: 8px 0;
+            color: #00CED1; /* Aqua */
+        }
+        #baseImageInput { 
+            display: none;
+        }
+        #keyInput, #decryptKeyInput { 
+            width: 100%;
+            max-width: 400px;
+            margin: 8px auto;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #00CED1; /* Aqua */
+            background-color: #222;
+            color: #00CED1; /* Aqua */
+            box-sizing: border-box;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            display: block;
+        }
+        .loading-bar { 
+            width: 100%;
+            max-width: 400px;
+            height: 10px;
+            background: #333;
+            border: 1px solid #00CED1; /* Aqua */
+            border-radius: 5px;
+            margin: 20px auto;
+            overflow: hidden;
+        }
+        .loading-bar-fill { 
+            width: 60%; /* Static for now */
+            height: 100%;
+            background: #00CED1; /* Aqua */
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrixCanvas"></canvas>
+    <div class="container">
+        <h1>Text-to-Image Steganography with AES</h1>
+        <p>Hide encrypted text in an image or extract it.</p>
+
+        <textarea id="inputText" placeholder="Enter your text here to hide..."></textarea>
+        <input type="text" id="keyInput" placeholder="Enter your encryption key (e.g., 'mysecretkey123')">
+        <button onclick="promptForImageChoice()">Hide Text in Image</button>
+        <button onclick="downloadImage()">Download Image</button>
+
+        <h3>Extract Hidden Text</h3>
+        <input type="file" id="imageInput" accept="image/png" onchange="loadImageForDecryption()">
+        <input type="text" id="decryptKeyInput" placeholder="Enter the decryption key">
+        <button id="decryptButton" onclick="decryptImage()" disabled>OK</button>
+
+        <input type="file" id="baseImageInput" accept="image/*" onchange="loadBaseImage()">
+
+        <canvas id="canvas"></canvas>
+        <div id="output"></div>
+        <div class="loading-bar">
+            <div class="loading-bar-fill"></div>
+        </div>
+    </div>
+
+    <script>
+        // Matrix falling code effect
+        const matrixCanvas = document.getElementById("matrixCanvas");
+        const matrixCtx = matrixCanvas.getContext("2d");
+
+        matrixCanvas.height = window.innerHeight;
+        matrixCanvas.width = window.innerWidth;
+
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+        const fontSize = 14;
+        const columns = matrixCanvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            matrixCtx.fillStyle = "rgba(0, 0, 0, 0.05)";
+            matrixCtx.fillRect(0, 0, matrixCanvas.width, matrixCanvas.height);
+
+            matrixCtx.fillStyle = "#00CED1"; // Aqua
+            matrixCtx.font = `${fontSize}px Courier New`;
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars.charAt(Math.floor(Math.random() * chars.length));
+                matrixCtx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > matrixCanvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        setInterval(drawMatrix, 50);
+
+        // Steganography logic
+        let encryptedImageData = null;
+        let textToHide = "";
+        const defaultSize = 100;
+        let loadedImage = null;
+
+        function createBaseImage(ctx, width, height) {
+            const gradient = ctx.createLinearGradient(0, 0, width, height);
+            gradient.addColorStop(0, "skyblue");
+            gradient.addColorStop(1, "darkblue");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            for (let i = 0; i < Math.min(width, height); i++) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.2})`;
+                ctx.fillRect(Math.random() * width, Math.random() * height, 2, 2);
+            }
+        }
+
+        function promptForImageChoice() {
+            textToHide = document.getElementById("inputText").value;
+            const key = document.getElementById("keyInput").value;
+            if (!textToHide) {
+                alert("Please enter some text to hide!");
+                return;
+            }
+            if (!key) {
+                alert("Please enter an encryption key!");
+                return;
+            }
+
+            const useOwnImage = window.confirm("Do you want to hide the text in your own image? (Click 'OK' for yes, 'Cancel' for a generated image)");
+            if (useOwnImage) {
+                document.getElementById("baseImageInput").click();
+            } else {
+                encryptText(null, defaultSize, defaultSize, key);
+            }
+        }
+
+        function loadBaseImage() {
+            const fileInput = document.getElementById("baseImageInput");
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const img = new Image();
+            img.onload = function() {
+                encryptText(img, img.width, img.height, document.getElementById("keyInput").value);
+            };
+            img.onerror = function() {
+                alert("Error loading the image. Ensure it’s a valid file.");
+                fileInput.value = "";
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        function encryptText(baseImage, width, height, key) {
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.display = "block";
+            canvas.classList.add("visible");
+
+            if (baseImage) {
+                ctx.drawImage(baseImage, 0, 0, width, height);
+            } else {
+                createBaseImage(ctx, width, height);
+            }
+
+            const encrypted = CryptoJS.AES.encrypt(textToHide, key);
+            const encryptedBase64 = encrypted.toString();
+            const encryptedBytes = CryptoJS.enc.Base64.parse(encryptedBase64).toString(CryptoJS.enc.Latin1);
+            const byteArray = Array.from(encryptedBytes).map(char => char.charCodeAt(0));
+            const textLength = byteArray.length;
+
+            const maxCapacity = Math.floor((width * height - 1) / 4);
+            if (textLength > maxCapacity) {
+                alert(`Encrypted data too long! Max bytes: ${maxCapacity} for ${width}x${height} image.`);
+                canvas.classList.remove("visible");
+                return;
+            }
+
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixels = imageData.data;
+
+            pixels[0] = textLength % 256;
+            pixels[1] = Math.floor(textLength / 256);
+            let dataIndex = 0;
+            for (let i = 4; dataIndex < byteArray.length && i < pixels.length; i += 4) {
+                pixels[i] = byteArray[dataIndex];
+                dataIndex++;
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            encryptedImageData = canvas.toDataURL("image/png");
+            document.getElementById("output").innerText = `Text encrypted and hidden in image! (${textLength} bytes) Click 'Download' to save it.`;
+            document.getElementById("baseImageInput").value = "";
+        }
+
+        function loadImageForDecryption() {
+            const fileInput = document.getElementById("imageInput");
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const img = new Image();
+            img.onload = function() {
+                loadedImage = img;
+                document.getElementById("decryptButton").disabled = false;
+                document.getElementById("output").innerText = "Image loaded. Enter the key and click 'OK' to decrypt.";
+                const canvas = document.getElementById("canvas");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                canvas.classList.add("visible");
+                canvas.getContext("2d").drawImage(img, 0, 0);
+            };
+            img.onerror = function() {
+                alert("Error loading the image. Ensure it’s a valid PNG file.");
+                fileInput.value = "";
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        function decryptImage() {
+            const key = document.getElementById("decryptKeyInput").value;
+            if (!key) {
+                alert("Please enter the decryption key!");
+                return;
+            }
+            if (!loadedImage) {
+                alert("Please upload an image first!");
+                return;
+            }
+
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+
+            canvas.width = loadedImage.width;
+            canvas.height = loadedImage.height;
+            canvas.classList.add("visible");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(loadedImage, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imageData.data;
+
+            const textLength = pixels[0] + (pixels[1] * 256);
+            const encryptedBytes = [];
+            for (let i = 4; i < 4 + textLength * 4 && i < pixels.length; i += 4) {
+                encryptedBytes.push(pixels[i]);
+            }
+
+            const encryptedLatin1 = String.fromCharCode(...encryptedBytes);
+            const encryptedBase64 = CryptoJS.enc.Latin1.parse(encryptedLatin1).toString(CryptoJS.enc.Base64);
+
+            try {
+                const decrypted = CryptoJS.AES.decrypt(encryptedBase64, key);
+                const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
+                if (!decryptedText) {
+                    document.getElementById("output").innerText = `Decryption failed! Wrong key or no valid text found. (Extracted ${textLength} bytes)`;
+                } else {
+                    document.getElementById("output").innerText = `Extracted text: "${decryptedText}"\n(Encrypted length: ${textLength} bytes)`;
+                }
+            } catch (e) {
+                document.getElementById("output").innerText = `Decryption error: ${e.message}\n(Extracted ${textLength} bytes)`;
+            }
+
+            document.getElementById("decryptButton").disabled = true;
+            document.getElementById("imageInput").value = "";
+        }
+
+        function downloadImage() {
+            if (!encryptedImageData) {
+                alert("No image to download! Please hide some text first.");
+                return;
+            }
+
+            let fileName = window.prompt("Enter a file name for the image (without extension):", "hidden_text_image");
+            if (!fileName) {
+                fileName = "hidden_text_image";
+            }
+            if (!fileName.toLowerCase().endsWith(".png")) {
+                fileName += ".png";
+            }
+
+            const link = document.createElement("a");
+            link.download = fileName;
+            link.href = encryptedImageData;
+            link.click();
+            document.getElementById("output").innerText = `Image downloaded as '${fileName}'!`;
+        }
+
+        function randomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+    </script>
+</body>
+</html>
