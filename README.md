@@ -83,8 +83,8 @@ Animated download success notification.
 This project is open-source under the MIT License.
 
 ✨ Author
-Sravanth Babu K
-Lokesh A
+- Sravanth Babu K
+- Lokesh A
 GitHub:sravanthbabu17
 GitHub:lokesh-000
 
